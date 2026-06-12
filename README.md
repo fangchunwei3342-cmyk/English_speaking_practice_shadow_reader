@@ -1,5 +1,12 @@
 # Shadow Reader · 影子跟读练习工具
 
+# Shadow Reader · 影子跟读练习工具
+
+## Live Demo
+
+🔗 [Try it here](https://fangchunwei3342-cmyk.github.io/English_speaking_practice_shadow_reader/shadow-reader.html)
+
+A lightweight, browser-based tool for...
 A lightweight, browser-based tool for sentence-by-sentence shadowing practice.  
 No installation, no server, no internet required after download.
 
