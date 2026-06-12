@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shadow Reader</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0f11;
+    --surface: #16181c;
+    --surface2: #1e2026;
+    --border: #2a2d35;
+    --accent: #c8f542;
+    --accent-dim: rgba(200,245,66,0.12);
+    --accent-glow: rgba(200,245,66,0.25);
+    --text: #e8eaf0;
+    --text-muted: #5a5f6e;
+    --text-mid: #9095a3;
+    --playing: #c8f542;
+    --playing-bg: rgba(200,245,66,0.08);
+    --radius: 10px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px 80px;
+  }
+
+  /* Subtle noise texture */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 0;
+  }
+
+  .container { max-width: 760px; width: 100%; position: relative; z-index: 1; }
+
+  header {
+    display: flex; align-items: baseline; gap: 12px;
+    margin-bottom: 36px;
+  }
+  .logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: 28px; color: var(--accent); letter-spacing: -0.5px;
+  }
+  .logo-sub { font-size: 11px; color: var(--text-muted); letter-spacing: 2px; text-transform: uppercase; }
+
+  /* Input area */
+  .input-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .input-label {
+    font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 10px;
+  }
+  textarea {
+    width: 100%; min-height: 120px; resize: vertical;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text);
+    font-family: 'DM Mono', monospace; font-size: 13px;
+    line-height: 1.7; padding: 12px 14px;
+    outline: none; transition: border-color 0.2s;
+  }
+  textarea:focus { border-color: rgba(200,245,66,0.4); }
+  textarea::placeholder { color: var(--text-muted); }
+
+  .input-actions {
+    display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap;
+    align-items: center; justify-content: space-between;
+  }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 8px 16px; border-radius: 6px; font-size: 12px;
+    font-family: 'DM Mono', monospace; letter-spacing: 0.5px;
+    cursor: pointer; border: none; transition: all 0.15s; font-weight: 500;
+  }
+  .btn-primary {
+    background: var(--accent); color: #0e0f11;
+  }
+  .btn-primary:hover { background: #d8ff52; transform: translateY(-1px); }
+  .btn-ghost {
+    background: transparent; color: var(--text-mid);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { border-color: var(--text-mid); color: var(--text); }
+
+  /* Controls bar */
+  .controls-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+
+  .ctrl-group {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--text-muted); letter-spacing: 1px;
+  }
+  .ctrl-group label { text-transform: uppercase; white-space: nowrap; }
+
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 90px; height: 3px;
+    background: var(--border); border-radius: 2px; outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 13px; height: 13px;
+    border-radius: 50%; background: var(--accent); cursor: pointer;
+  }
+  .range-val { min-width: 28px; text-align: left; color: var(--text-mid); font-size: 11px; }
+
+  .divider { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+
+  /* Voice selector */
+  select {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text-mid); font-family: 'DM Mono', monospace;
+    font-size: 11px; padding: 4px 8px; border-radius: 5px; cursor: pointer; outline: none;
+    max-width: 170px;
+  }
+
+  /* Auto-play toggle */
+  .toggle-wrap { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .toggle {
+    width: 34px; height: 18px; border-radius: 9px;
+    background: var(--border); position: relative; transition: background 0.2s; cursor: pointer;
+    border: none; flex-shrink: 0;
+  }
+  .toggle.on { background: var(--accent); }
+  .toggle::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #0e0f11; transition: left 0.2s;
+  }
+  .toggle.on::after { left: 18px; }
+  .toggle-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
+
+  /* Playbar */
+  .playbar {
+    display: flex; align-items: center; gap: 10px;
+    margin-left: auto;
+  }
+  .play-big {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--accent); border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s; flex-shrink: 0;
+  }
+  .play-big:hover { transform: scale(1.1); }
+  .play-big svg { fill: #0e0f11; }
+  .play-big.pause svg { display: none; }
+  .play-big.pause::after { content: ''; display: block; width: 10px; height: 12px;
+    border-left: 3px solid #0e0f11; border-right: 3px solid #0e0f11; }
+  .skip-btn {
+    background: none; border: 1px solid var(--border); color: var(--text-muted);
+    width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; transition: all 0.15s;
+  }
+  .skip-btn:hover { border-color: var(--text-mid); color: var(--text); }
+
+  /* Sentence list */
+  .sentence-list { display: flex; flex-direction: column; gap: 4px; }
+
+  .sentence-row {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 14px; border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer; transition: all 0.18s;
+    position: relative; overflow: hidden;
+  }
+  .sentence-row:hover { background: var(--surface); border-color: var(--border); }
+  .sentence-row.active {
+    background: var(--playing-bg);
+    border-color: rgba(200,245,66,0.3);
+  }
+  .sentence-row.active::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px; background: var(--accent); border-radius: 2px 0 0 2px;
+  }
+
+  .s-num {
+    font-size: 10px; color: var(--text-muted); min-width: 22px;
+    padding-top: 2px; letter-spacing: 1px; font-weight: 500;
+    flex-shrink: 0;
+  }
+  .sentence-row.active .s-num { color: var(--accent); }
+
+  .s-text {
+    font-size: 14px; line-height: 1.8; color: var(--text-mid);
+    flex: 1; transition: color 0.18s;
+  }
+  .sentence-row:hover .s-text,
+  .sentence-row.active .s-text { color: var(--text); }
+
+  .s-play {
+    flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--surface2); border: 1px solid var(--border);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: all 0.15s; margin-top: 1px;
+  }
+  .sentence-row:hover .s-play,
+  .sentence-row.active .s-play { opacity: 1; }
+  .sentence-row.active .s-play {
+    background: var(--accent-dim); border-color: rgba(200,245,66,0.4);
+  }
+  .s-play svg { fill: var(--text-muted); width: 10px; height: 10px; }
+  .sentence-row.active .s-play svg { fill: var(--accent); }
+
+  /* Status */
+  .status-bar {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 30px; padding: 8px 20px;
+    font-size: 11px; color: var(--text-muted); letter-spacing: 1px;
+    display: flex; align-items: center; gap: 10px;
+    opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    z-index: 100; white-space: nowrap;
+  }
+  .status-bar.show { opacity: 1; }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .empty-state {
+    text-align: center; padding: 60px 20px;
+    color: var(--text-muted); font-size: 12px; letter-spacing: 1px;
+  }
+  .empty-icon { font-size: 36px; margin-bottom: 12px; opacity: 0.3; }
+
+  /* Delay selector */
+  .delay-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--text-muted); letter-spacing: 1px;
+  }
+
+  @media (max-width: 520px) {
+    .controls-bar { flex-direction: column; align-items: flex-start; }
+    .playbar { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <span class="logo">Shadow Reader</span>
+    <span class="logo-sub">逐句跟读 · 影子练习</span>
+  </header>
+
+  <!-- Input -->
+  <div class="input-card">
+    <div class="input-label">粘贴你的英文文稿</div>
+    <textarea id="inputText" placeholder="Paste your English script here. It will be split into sentences automatically..."></textarea>
+    <div class="input-actions">
+      <button class="btn btn-primary" onclick="loadText()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        载入文稿
+      </button>
+      <button class="btn btn-ghost" onclick="clearAll()">清空</button>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls-bar" id="controlsBar" style="display:none">
+
+    <div class="ctrl-group">
+      <label>语速</label>
+      <input type="range" id="rateSlider" min="0.5" max="1.5" step="0.05" value="0.85" oninput="updateRate()">
+      <span class="range-val" id="rateVal">0.85×</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="ctrl-group">
+      <label>音色</label>
+      <select id="voiceSelect" onchange="updateVoice()"></select>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="ctrl-group delay-row">
+      <label>句间停顿</label>
+      <input type="range" id="delaySlider" min="0" max="4" step="0.5" value="1">
+      <span class="range-val" id="delayVal">1s</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Auto toggle -->
+    <div class="toggle-wrap" onclick="toggleAuto()">
+      <button class="toggle" id="autoToggle"></button>
+      <span class="toggle-label">自动顺读</span>
+    </div>
+
+    <div class="playbar">
+      <button class="skip-btn" onclick="skipPrev()" title="上一句">‹</button>
+      <button class="play-big" id="mainPlayBtn" onclick="toggleMainPlay()" title="播放 / 暂停">
+        <svg viewBox="0 0 24 24" width="12" height="12"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button class="skip-btn" onclick="skipNext()" title="下一句">›</button>
+    </div>
+  </div>
+
+  <!-- Sentence list -->
+  <div class="sentence-list" id="sentenceList">
+    <div class="empty-state">
+      <div class="empty-icon">◈</div>
+      粘贴文稿并点击「载入文稿」开始练习
+    </div>
+  </div>
+
+</div>
+
+<!-- Status bar -->
+<div class="status-bar" id="statusBar">
+  <span class="status-dot"></span>
+  <span id="statusText">正在朗读…</span>
+</div>
+
+<script>
+let sentences = [];
+let currentIdx = -1;
+let synth = window.speechSynthesis;
+let voices = [];
+let selectedVoice = null;
+let autoPlay = false;
+let isPlaying = false;
+let utterance = null;
+let statusTimer = null;
+
+// Load voices
+function loadVoices() {
+  voices = synth.getVoices().filter(v => v.lang.startsWith('en'));
+  if (!voices.length) voices = synth.getVoices();
+  const sel = document.getElementById('voiceSelect');
+  sel.innerHTML = '';
+  voices.forEach((v, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `${v.name.substring(0,22)}${v.lang ? ' · '+v.lang : ''}`;
+    sel.appendChild(opt);
+  });
+  // Prefer en-US or en-GB
+  const pref = voices.findIndex(v => v.lang === 'en-US' || v.lang === 'en-GB');
+  if (pref >= 0) { sel.value = pref; selectedVoice = voices[pref]; }
+  else if (voices.length) selectedVoice = voices[0];
+}
+loadVoices();
+if (speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = loadVoices;
+
+function updateVoice() {
+  const idx = document.getElementById('voiceSelect').value;
+  selectedVoice = voices[idx];
+}
+
+function updateRate() {
+  const v = parseFloat(document.getElementById('rateSlider').value);
+  document.getElementById('rateVal').textContent = v.toFixed(2) + '×';
+}
+
+document.getElementById('delaySlider').addEventListener('input', function() {
+  document.getElementById('delayVal').textContent = this.value + 's';
+});
+
+// Split text into sentences
+function splitSentences(text) {
+  // Split on . ! ? followed by space or end, keeping delimiter
+  const raw = text.match(/[^.!?]+[.!?]+[\s]*/g) || [text];
+  return raw.map(s => s.trim()).filter(s => s.length > 1);
+}
+
+function loadText() {
+  const text = document.getElementById('inputText').value.trim();
+  if (!text) return;
+  stopCurrent();
+  sentences = splitSentences(text);
+  currentIdx = -1;
+  isPlaying = false;
+  renderList();
+  document.getElementById('controlsBar').style.display = 'flex';
+  updateMainBtn();
+}
+
+function clearAll() {
+  stopCurrent();
+  sentences = [];
+  currentIdx = -1;
+  document.getElementById('inputText').value = '';
+  document.getElementById('controlsBar').style.display = 'none';
+  document.getElementById('sentenceList').innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">◈</div>
+      粘贴文稿并点击「载入文稿」开始练习
+    </div>`;
+}
+
+function renderList() {
+  const list = document.getElementById('sentenceList');
+  list.innerHTML = '';
+  sentences.forEach((s, i) => {
+    const row = document.createElement('div');
+    row.className = 'sentence-row';
+    row.id = `s-${i}`;
+    row.innerHTML = `
+      <span class="s-num">${String(i+1).padStart(2,'0')}</span>
+      <span class="s-text">${escHtml(s)}</span>
+      <button class="s-play" onclick="event.stopPropagation(); playSentence(${i})">
+        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      </button>`;
+    row.onclick = () => playSentence(i);
+    list.appendChild(row);
+  });
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function setActive(idx) {
+  document.querySelectorAll('.sentence-row').forEach(r => r.classList.remove('active'));
+  if (idx >= 0 && idx < sentences.length) {
+    const row = document.getElementById(`s-${idx}`);
+    if (row) {
+      row.classList.add('active');
+      row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+}
+
+function showStatus(text) {
+  clearTimeout(statusTimer);
+  const bar = document.getElementById('statusBar');
+  document.getElementById('statusText').textContent = text;
+  bar.classList.add('show');
+}
+function hideStatus() {
+  statusTimer = setTimeout(() => {
+    document.getElementById('statusBar').classList.remove('show');
+  }, 800);
+}
+
+function getDelay() {
+  return parseFloat(document.getElementById('delaySlider').value) * 1000;
+}
+
+function stopCurrent() {
+  synth.cancel();
+  isPlaying = false;
+  updateMainBtn();
+  hideStatus();
+}
+
+function playSentence(idx) {
+  if (idx < 0 || idx >= sentences.length) return;
+  stopCurrent();
+  currentIdx = idx;
+  setActive(idx);
+  const text = sentences[idx];
+  utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = parseFloat(document.getElementById('rateSlider').value);
+  if (selectedVoice) utterance.voice = selectedVoice;
+  utterance.onstart = () => {
+    isPlaying = true;
+    updateMainBtn();
+    showStatus(`句 ${idx+1} / ${sentences.length}`);
+  };
+  utterance.onend = () => {
+    isPlaying = false;
+    updateMainBtn();
+    hideStatus();
+    if (autoPlay) {
+      if (idx + 1 < sentences.length) {
+        setTimeout(() => playSentence(idx + 1), getDelay());
+      } else {
+        showStatus('✓ 已到达末句');
+        setTimeout(() => hideStatus(), 2000);
+      }
+    }
+  };
+  utterance.onerror = () => { isPlaying = false; updateMainBtn(); hideStatus(); };
+  synth.speak(utterance);
+}
+
+function toggleMainPlay() {
+  if (sentences.length === 0) return;
+  if (isPlaying) {
+    stopCurrent();
+  } else {
+    const start = currentIdx >= 0 ? currentIdx : 0;
+    playSentence(start);
+  }
+}
+
+function skipPrev() {
+  if (sentences.length === 0) return;
+  const target = Math.max(0, (currentIdx > 0 ? currentIdx - 1 : 0));
+  playSentence(target);
+}
+
+function skipNext() {
+  if (sentences.length === 0) return;
+  const target = Math.min(sentences.length - 1, currentIdx + 1 < sentences.length ? currentIdx + 1 : currentIdx);
+  playSentence(target);
+}
+
+function updateMainBtn() {
+  const btn = document.getElementById('mainPlayBtn');
+  if (isPlaying) {
+    btn.innerHTML = '<span style="display:flex;gap:3px;align-items:center;"><span style="width:3px;height:12px;background:#0e0f11;border-radius:1px"></span><span style="width:3px;height:12px;background:#0e0f11;border-radius:1px"></span></span>';
+  } else {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="#0e0f11"><path d="M8 5v14l11-7z"/></svg>';
+  }
+}
+
+function toggleAuto() {
+  autoPlay = !autoPlay;
+  const t = document.getElementById('autoToggle');
+  t.classList.toggle('on', autoPlay);
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'TEXTAREA') return;
+  if (e.code === 'Space') { e.preventDefault(); toggleMainPlay(); }
+  if (e.code === 'ArrowRight') { e.preventDefault(); skipNext(); }
+  if (e.code === 'ArrowLeft') { e.preventDefault(); skipPrev(); }
+});
+</script>
+</body>
+</html>
