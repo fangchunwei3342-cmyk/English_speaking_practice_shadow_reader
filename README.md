@@ -1,6 +1,5 @@
 # Shadow Reader · 影子跟读练习工具
 
-# Shadow Reader · 影子跟读练习工具
 
 ## Live Demo
 
